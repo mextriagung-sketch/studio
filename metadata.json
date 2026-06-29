@@ -1,0 +1,6 @@
+{
+  "name": "Studio Foto",
+  "description": "Aplikasi pencatatan pesanan studio foto terintegrasi Google Sheets via Google Apps Script dengan pengambilan foto langsung.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
