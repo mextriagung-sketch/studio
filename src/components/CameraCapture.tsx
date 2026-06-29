@@ -12,6 +12,7 @@ export default function CameraCapture({ onPhotoCaptured, savedPhoto, onClearPhot
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
   const [error, setError] = useState<string | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -24,17 +25,14 @@ export default function CameraCapture({ onPhotoCaptured, savedPhoto, onClearPhot
         .then((allDevices) => {
           const videoDevices = allDevices.filter(device => device.kind === 'videoinput');
           setDevices(videoDevices);
-          if (videoDevices.length > 0 && !selectedDeviceId) {
-            setSelectedDeviceId(videoDevices[0].deviceId);
-          }
         })
         .catch((err) => {
           console.error("Error listing video devices:", err);
         });
     }
-  }, [isCameraActive, selectedDeviceId]);
+  }, [isCameraActive]);
 
-  // Start stream when camera is active or device changes
+  // Start stream when camera is active, device changes, or facing mode changes
   useEffect(() => {
     if (isCameraActive) {
       startCamera();
@@ -44,14 +42,16 @@ export default function CameraCapture({ onPhotoCaptured, savedPhoto, onClearPhot
     return () => {
       stopCamera();
     };
-  }, [isCameraActive, selectedDeviceId]);
+  }, [isCameraActive, selectedDeviceId, facingMode]);
 
   const startCamera = async () => {
     stopCamera();
     setError(null);
     try {
       const constraints: MediaStreamConstraints = {
-        video: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : { facingMode: "user" },
+        video: selectedDeviceId 
+          ? { deviceId: { exact: selectedDeviceId } } 
+          : { facingMode: facingMode },
         audio: false
       };
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -109,12 +109,9 @@ export default function CameraCapture({ onPhotoCaptured, savedPhoto, onClearPhot
     }
   };
 
-  const toggleCameraSource = () => {
-    if (devices.length > 1) {
-      const currentIndex = devices.findIndex(d => d.deviceId === selectedDeviceId);
-      const nextIndex = (currentIndex + 1) % devices.length;
-      setSelectedDeviceId(devices[nextIndex].deviceId);
-    }
+  const toggleFacingMode = () => {
+    setSelectedDeviceId(""); // Clear exact device selection so facingMode takes precedence
+    setFacingMode((prev) => (prev === "user" ? "environment" : "user"));
   };
 
   return (
@@ -136,7 +133,7 @@ export default function CameraCapture({ onPhotoCaptured, savedPhoto, onClearPhot
                 onClearPhoto();
                 setIsCameraActive(true);
               }}
-              className="p-2.5 bg-white hover:bg-slate-100 text-slate-800 rounded-full shadow-lg transition-transform hover:scale-105"
+              className="p-2.5 bg-white hover:bg-slate-100 text-slate-800 rounded-full shadow-lg transition-transform hover:scale-105 cursor-pointer"
               title="Ambil Ulang"
               type="button"
             >
@@ -144,7 +141,7 @@ export default function CameraCapture({ onPhotoCaptured, savedPhoto, onClearPhot
             </button>
             <button
               onClick={onClearPhoto}
-              className="p-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-full shadow-lg transition-transform hover:scale-105"
+              className="p-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-full shadow-lg transition-transform hover:scale-105 cursor-pointer"
               title="Hapus Foto"
               type="button"
             >
@@ -165,40 +162,63 @@ export default function CameraCapture({ onPhotoCaptured, savedPhoto, onClearPhot
             className="w-full h-full object-cover"
           />
           
-          {/* Controls Overlay */}
-          <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-4 px-4">
-            {devices.length > 1 && (
-              <button
-                onClick={toggleCameraSource}
-                className="p-3 bg-slate-800/95 hover:bg-slate-700 text-white rounded-full shadow-lg transition-transform active:scale-95"
-                title="Ganti Kamera"
-                type="button"
+          {/* Device Selector Dropdown (Top Right) */}
+          {devices.length > 0 && (
+            <div className="absolute top-3 right-3 bg-slate-900/85 backdrop-blur-xs text-white rounded-lg p-1.5 px-2 text-[11px] flex items-center gap-1.5 max-w-[200px] border border-slate-700 shadow-sm">
+              <select
+                value={selectedDeviceId}
+                onChange={(e) => setSelectedDeviceId(e.target.value)}
+                className="bg-transparent border-none text-white text-[11px] font-medium focus:outline-hidden cursor-pointer w-full"
               >
-                <RotateCw className="w-5 h-5" />
-              </button>
-            )}
+                <option value="" className="text-slate-900">
+                  Otomatis ({facingMode === "user" ? "Depan" : "Belakang"})
+                </option>
+                {devices.map((device, index) => (
+                  <option key={device.deviceId} value={device.deviceId} className="text-slate-900">
+                    {device.label || `Kamera ${index + 1}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Controls Overlay */}
+          <div className="absolute bottom-4 left-0 right-0 flex items-center justify-between px-6">
+            {/* Toggle Camera Source Button (Front/Back) */}
+            <button
+              onClick={toggleFacingMode}
+              className="flex items-center gap-1 px-3 py-2 bg-slate-900/90 hover:bg-slate-800 text-white rounded-lg shadow-md transition-all active:scale-95 text-xs font-semibold border border-slate-700/50 cursor-pointer"
+              title="Ganti Kamera Depan / Belakang"
+              type="button"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+              <span>{facingMode === "user" ? "Kamera Belakang" : "Kamera Depan"}</span>
+            </button>
             
+            {/* Capture Trigger Button */}
             <button
               onClick={handleCapture}
-              className="p-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full shadow-lg transition-transform active:scale-90 scale-110 flex items-center justify-center"
+              className="p-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full shadow-lg transition-transform active:scale-90 scale-110 flex items-center justify-center cursor-pointer border border-emerald-400"
               title="Ambil Foto"
               type="button"
             >
               <Camera className="w-6 h-6" />
             </button>
 
+            {/* Cancel/Close Button */}
             <button
               onClick={() => setIsCameraActive(false)}
-              className="p-3 bg-rose-600/95 hover:bg-rose-700 text-white rounded-full shadow-lg transition-transform active:scale-95"
+              className="flex items-center gap-1 px-3 py-2 bg-rose-600/95 hover:bg-rose-700 text-white rounded-lg shadow-md transition-all active:scale-95 text-xs font-semibold cursor-pointer"
               title="Batalkan Kamera"
               type="button"
             >
-              <Trash2 className="w-5 h-5" />
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Batal</span>
             </button>
           </div>
 
-          <div className="absolute top-3 left-3 bg-emerald-500/90 text-white text-xs px-2.5 py-1 rounded-md flex items-center gap-1.5 animate-pulse font-medium">
-            <Video className="w-3.5 h-3.5" /> Live Kamera
+          <div className="absolute top-3 left-3 bg-emerald-500/90 text-white text-[11px] px-2.5 py-1 rounded-md flex items-center gap-1.5 animate-pulse font-medium">
+            <Video className="w-3.5 h-3.5" /> Live Kamera ({facingMode === "user" ? "Depan" : "Belakang"})
           </div>
         </div>
       ) : (
